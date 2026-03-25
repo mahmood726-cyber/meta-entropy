@@ -1,0 +1,17 @@
+{
+  "n_reviews": 403,
+  "entropy_classes": {
+    "Concentrated": 357,
+    "Moderate": 43,
+    "Chaotic": 3
+  },
+  "n_multimodal": 243,
+  "pct_multimodal": 60.3,
+  "n_skewed": 184,
+  "pct_skewed": 45.7,
+  "correlation_entropy_i2": -0.173,
+  "correlation_nei_i2": 0.514,
+  "n_hidden_heterogeneity": 0,
+  "n_artefactual_heterogeneity": 34,
+  "elapsed_seconds": 854.7
+}
