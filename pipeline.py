@@ -51,19 +51,17 @@ def shannon_entropy(yi, sei):
     components = rng.randint(0, k, n_samples)
     samples = np.array([rng.normal(yi[c], sei[c]) for c in components])
 
-    # Evaluate mixture density at each sample
-    log_densities = np.zeros(n_samples)
-    for i in range(n_samples):
-        # log p(x) = log( (1/k) * sum_j N(x | yj, sej^2) )
-        log_components = np.array([
-            -0.5 * ((samples[i] - yi[j]) / sei[j])**2 - np.log(sei[j]) - 0.5 * np.log(2 * np.pi)
-            for j in range(k)
-        ])
-        log_densities[i] = np.log(1.0 / k) + log_sum_exp(log_components)
+    # Evaluate mixture density at each sample (vectorized)
+    # Shape: (n_samples, k) — log N(sample_i | yj, sej^2)
+    diff = (samples[:, None] - yi[None, :]) / sei[None, :]  # (n_samples, k)
+    log_components = -0.5 * diff**2 - np.log(sei)[None, :] - 0.5 * np.log(2 * np.pi)
+    # log p(x) = log(1/k) + logsumexp over components
+    max_lc = np.max(log_components, axis=1)
+    log_densities = np.log(1.0 / k) + max_lc + np.log(np.sum(np.exp(log_components - max_lc[:, None]), axis=1))
 
     # H = -E[log p(x)]
-    entropy = -np.mean(log_densities)
-    return float(entropy)
+    entropy = -float(np.mean(log_densities))
+    return entropy
 
 
 def log_sum_exp(x):
@@ -92,21 +90,16 @@ def kl_divergence_from_pooled(yi, sei, theta, se_theta, tau2):
     # Pooled distribution: N(theta, tau2 + se_theta^2)
     sigma_pooled = math.sqrt(tau2 + se_theta**2) if (tau2 + se_theta**2) > 0 else 0.01
 
-    kl = 0.0
-    for i in range(n_samples):
-        # log p_mixture(x)
-        log_mix = np.log(1.0 / k) + log_sum_exp([
-            -0.5 * ((samples[i] - yi[j]) / sei[j])**2 - np.log(sei[j]) - 0.5 * np.log(2 * np.pi)
-            for j in range(k)
-        ])
+    # Vectorized KL: log p_mixture - log q_pooled
+    diff = (samples[:, None] - yi[None, :]) / sei[None, :]
+    log_components = -0.5 * diff**2 - np.log(sei)[None, :] - 0.5 * np.log(2 * np.pi)
+    max_lc = np.max(log_components, axis=1)
+    log_mix = np.log(1.0 / k) + max_lc + np.log(np.sum(np.exp(log_components - max_lc[:, None]), axis=1))
 
-        # log q_pooled(x)
-        log_pooled = -0.5 * ((samples[i] - theta) / sigma_pooled)**2 - math.log(sigma_pooled) - 0.5 * math.log(2 * math.pi)
+    log_pooled = -0.5 * ((samples - theta) / sigma_pooled)**2 - math.log(sigma_pooled) - 0.5 * math.log(2 * math.pi)
 
-        kl += (log_mix - log_pooled)
-
-    kl /= n_samples
-    return max(0.0, float(kl))  # KL >= 0 by definition
+    kl = float(np.mean(log_mix - log_pooled))
+    return max(0.0, kl)
 
 
 def mutual_information_effect_precision(yi, sei):
